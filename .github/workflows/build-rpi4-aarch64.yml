@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-22.04-arm
     timeout-minutes: 60
     permissions:
-      contents: read
+      contents: write
     env:
       TARGET_CPU: ${{ inputs.target_cpu || 'cortex-a72' }}
     steps:
@@ -116,6 +116,22 @@ jobs:
           path: ${{ steps.package.outputs.stem }}.tar.gz
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish GitHub Release
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: v${{ steps.package.outputs.version }}-rpi4
+          ARCHIVE_FILE: ${{ steps.package.outputs.stem }}.tar.gz
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$ARCHIVE_FILE" --clobber
+          else
+            gh release create "$RELEASE_TAG" "$ARCHIVE_FILE" \
+              --target "${{ github.sha }}" \
+              --title "$RELEASE_TAG (Raspberry Pi 4B aarch64)" \
+              --notes "Raspberry Pi 4B (\`${{ env.TARGET_CPU }}\` / \`aarch64\`) optimized build of EasyCLIProxyAPI with WebKitGTK DMA-BUF + native Wayland, performance-first lite UI mode, lazy-loaded routes, and fat LTO."
+          fi
 
       - name: Write build summary
         env:
